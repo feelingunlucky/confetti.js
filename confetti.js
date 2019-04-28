@@ -1,22 +1,35 @@
 var maxParticleCount = 150; //set max confetti count
 var particleSpeed = 2; //set the particle animation speed
+var confettiFrameInterval = 20; //the confetti animation frame interval
 var startConfetti; //call to start confetti animation
 var stopConfetti; //call to stop adding confetti
 var toggleConfetti; //call to start or stop the confetti animation depending on whether it's already running
+var pauseConfetti; //call to freeze confetti animation
+var resumeConfetti; //call to unfreeze confetti animation
+var toggleConfettiPause; //call to toggle whether the confetti animation is paused
 var removeConfetti; //call to stop the confetti animation and remove all confetti immediately
+var isConfettiPaused; //call and returns true or false depending on whether the confetti animation is paused
 var isConfettiRunning; //call and returns true or false depending on whether the animation is running
 
 (function() {
 	startConfetti = startConfettiInner;
 	stopConfetti = stopConfettiInner;
 	toggleConfetti = toggleConfettiInner;
+	pauseConfetti = pauseConfettiInner;
+	resumeConfetti = resumeConfettiInner;
+	toggleConfettiPause = toggleConfettiPauseInner;
+	isConfettiPaused = isConfettiPausedInner;
 	removeConfetti = removeConfettiInner;
 	isConfettiRunning = isConfettiRunningInner;
+	var supportsAnimationFrame = window.requestAnimationFrame || window.webkitRequestAnimationFrame || window.mozRequestAnimationFrame || window.oRequestAnimationFrame || window.msRequestAnimationFrame;
 	var colors = ["DodgerBlue", "OliveDrab", "Gold", "Pink", "SlateBlue", "LightBlue", "Violet", "PaleGreen", "SteelBlue", "SandyBrown", "Chocolate", "Crimson"]
 	var streamingConfetti = false;
 	var animationTimer = null;
+	var pause = false;
+	var lastFrameTime = Date.now();
 	var particles = [];
 	var waveAngle = 0;
+	var context = null;
 	
 	function resetParticle(particle, width, height) {
 		particle.color = colors[(Math.random() * colors.length) | 0];
@@ -29,17 +42,56 @@ var isConfettiRunning; //call and returns true or false depending on whether the
 		return particle;
 	}
 
+	function toggleConfettiPauseInner() {
+		if (pause)
+			resumeConfettiInner();
+		else
+			pauseConfettiInner();
+	}
+
+	function isConfettiPausedInner() {
+		return pause;
+	}
+
+	function pauseConfettiInner() {
+		pause = true;
+	}
+
+	function resumeConfettiInner() {
+		pause = false;
+		runAnimation();
+	}
+
+	function runAnimation() {
+		if (pause)
+			return;
+		if (particles.length === 0) {
+			context.clearRect(0, 0, window.innerWidth, window.innerHeight);
+			animationTimer = null;
+		} else {
+			var now = Date.now();
+			var delta = now - lastFrameTime;
+			if (!supportsAnimationFrame || delta > confettiFrameInterval) {
+				context.clearRect(0, 0, window.innerWidth, window.innerHeight);
+				updateParticles();
+				drawParticles(context);
+				lastFrameTime = now - (delta % confettiFrameInterval);
+			}
+			animationTimer = requestAnimationFrame(runAnimation);
+		}
+	}
+
 	function startConfettiInner() {
 		var width = window.innerWidth;
 		var height = window.innerHeight;
-		window.requestAnimFrame = (function() {
+		window.requestAnimationFrame = (function() {
 			return window.requestAnimationFrame ||
 				window.webkitRequestAnimationFrame ||
 				window.mozRequestAnimationFrame ||
 				window.oRequestAnimationFrame ||
 				window.msRequestAnimationFrame ||
 				function (callback) {
-					return window.setTimeout(callback, 16.6666667);
+					return window.setTimeout(callback, confettiFrameInterval);
 				};
 		})();
 		var canvas = document.getElementById("confetti-canvas");
@@ -54,23 +106,13 @@ var isConfettiRunning; //call and returns true or false depending on whether the
 				canvas.width = window.innerWidth;
 				canvas.height = window.innerHeight;
 			}, true);
+			context = canvas.getContext("2d");
 		}
-		var context = canvas.getContext("2d");
 		while (particles.length < maxParticleCount)
 			particles.push(resetParticle({}, width, height));
 		streamingConfetti = true;
-		if (animationTimer === null) {
-			(function runAnimation() {
-				context.clearRect(0, 0, window.innerWidth, window.innerHeight);
-				if (particles.length === 0)
-					animationTimer = null;
-				else {
-					updateParticles();
-					drawParticles(context);
-					animationTimer = requestAnimFrame(runAnimation);
-				}
-			})();
-		}
+		pause = false;
+		runAnimation();
 	}
 
 	function stopConfettiInner() {
@@ -79,6 +121,7 @@ var isConfettiRunning; //call and returns true or false depending on whether the
 
 	function removeConfettiInner() {
 		stopConfetti();
+		pause = false;
 		particles = [];
 	}
 
